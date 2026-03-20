@@ -283,4 +283,32 @@ def write_bank_output(
             continue  # déjà renseigné par le rapprochement
         ws.cell(row=row_idx, column=max_col + 1, value=label).fill = FILL_REVIEW
 
+    # ── Formatage des colonnes source : dates C/D, montant F ─────────────────
+    headers = [ws.cell(row=1, column=c).value for c in range(1, max_col + 1)]
+    date_src_cols = [
+        i + 1 for i, h in enumerate(headers)
+        if h and any(k in str(h) for k in ("Date comptable", "Date valeur"))
+    ]
+    credit_cols = [
+        i + 1 for i, h in enumerate(headers)
+        if h and "Credit" in str(h)
+    ]
+    for col in date_src_cols:
+        for row in range(2, ws.max_row + 1):
+            cell = ws.cell(row=row, column=col)
+            if cell.value and isinstance(cell.value, str):
+                converted = to_date(cell.value)
+                if converted:
+                    cell.value = converted
+                    cell.number_format = DATE_FORMAT
+            elif isinstance(cell.value, datetime):
+                cell.number_format = DATE_FORMAT
+    for col in credit_cols:
+        for row in range(2, ws.max_row + 1):
+            cell = ws.cell(row=row, column=col)
+            val = normalize_amount(cell.value)
+            if val is not None:
+                cell.value = val
+                cell.number_format = "#,##0.00"
+
     wb.save(output_path)

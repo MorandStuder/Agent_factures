@@ -414,10 +414,11 @@ def pass1_bank_to_invoices(
                     inv.get("Numéro de facture", "") or ""
                 ).strip()
                 account_match = mapped_acct.lower() == bank_acct.lower()
-                amount_match = (
-                    br_amount is not None
-                    and inv_amount is not None
-                    and abs(br_amount - inv_amount) < 0.01
+                # Combo : la somme totale correspond au crédit → amount_match True
+                # même si le montant individuel diffère du crédit bancaire.
+                amount_match = br_amount is not None and (
+                    len(assigned) > 1
+                    or (inv_amount is not None and abs(br_amount - inv_amount) < 0.01)
                 )
                 invoice_found = inv_num in found_num_set
                 sim = client_similarity(inv_client, btext, client_mapping)

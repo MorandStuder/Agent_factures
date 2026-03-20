@@ -17,7 +17,7 @@ py main.py --diagnose 441 549 560
 
 Dans `output/` :
 - `ERP_reconcilie_YYYYMMDD_HHMMSS.xlsx` — ERP enrichi avec 6 colonnes ajoutées (tableau vert clair, volets figés en G2, colonnes B–E masquées)
-- `Banque_reconciliee_YYYYMMDD_HHMMSS.xlsx` — relevé bancaire enrichi avec 7 colonnes ajoutées
+- `Banque_reconciliee_YYYYMMDD_HHMMSS.xlsx` — relevé bancaire enrichi avec 7 colonnes ajoutées ; dates C/D et montant F reformatés (date `DD/MM/YYYY`, nombre `#,##0.00`)
 
 ## Structure du projet
 

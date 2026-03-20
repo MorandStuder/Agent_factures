@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.2 — 2026-03-20
+
+### Améliorations
+- Fichier banque : colonnes C (Date comptable) et D (Date valeur) converties en dates
+  Excel au format `DD/MM/YYYY`
+- Fichier banque : colonne F (Crédit) formatée comme nombre `#,##0.00`
+  (était texte importé depuis le CSV source)
+
+---
+
 ## v1.2.1 — 2026-03-19
 
 ### Corrections
