@@ -28,6 +28,7 @@ from reconcile.config import (
 from reconcile.loaders import (
     load_client_mapping,
     load_previous_comments,
+    load_previous_erp_matches,
     load_workbook_data,
     normalize_amount,
 )
@@ -48,6 +49,7 @@ def main() -> None:
     print(f"  Banque : {BANK_FILE}")
     client_mapping, account_overrides = load_client_mapping()
     previous_comments = load_previous_comments()
+    prev_matched = load_previous_erp_matches()
     _, all_invoices = load_workbook_data(ERP_FILE)
     _, bank_rows = load_workbook_data(BANK_FILE)
     print(f"  {len(all_invoices)} factures ERP chargées")
@@ -122,7 +124,14 @@ def main() -> None:
         f"{len(erp_matches)} factures"
     )
 
-    print_summary(matchable, erp_matches, bank_matches)
+    unpaid_unmatched = [
+        inv for inv in non_payees
+        if inv["_row_idx"] not in erp_matches
+    ]
+    print_summary(
+        matchable, erp_matches, bank_matches,
+        prev_matched=prev_matched,
+    )
 
     erp_out = OUTPUT_DIR / f"ERP_reconcilie_{ts}.xlsx"
     bank_out = OUTPUT_DIR / f"Banque_reconciliee_{ts}.xlsx"
@@ -160,7 +169,10 @@ def main() -> None:
             labeled_exclusions[row["_row_idx"]] = label
 
     print("Génération des fichiers de sortie...")
-    write_erp_output(ERP_FILE, all_invoices, erp_matches, erp_out)
+    write_erp_output(
+        ERP_FILE, all_invoices, erp_matches, erp_out,
+        unpaid_unmatched=unpaid_unmatched,
+    )
     write_bank_output(
         BANK_FILE, bank_matches, bank_row_to_invoices,
         labeled_exclusions, bank_row_scores, bank_out,

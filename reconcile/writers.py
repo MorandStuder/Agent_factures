@@ -9,6 +9,8 @@ import openpyxl
 from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo
 
+from openpyxl.styles import Font
+
 from .config import (
     FILL_AUTO,
     FILL_NONE,
@@ -62,6 +64,7 @@ def write_erp_output(
     all_invoices: list[dict],
     erp_matches: dict[int, dict],
     output_path: Path,
+    unpaid_unmatched: list[dict] | None = None,
 ) -> None:
     """Écrit le fichier ERP enrichi avec les colonnes de réconciliation.
 
@@ -73,7 +76,10 @@ def write_erp_output(
     - Libellé bancaire
     - Montant crédit
 
-    Colorie chaque ligne selon le score (vert >= 80, jaune >= 40, rouge = non rapproché).
+    Ajoute également un onglet "Factures à payer" si unpaid_unmatched
+    est fourni (tableau trié par client avec total en bas).
+
+    Colorie chaque ligne selon le score (vert >= 80, jaune >= 40).
     Auto-dimensionne toutes les colonnes et démasque les colonnes cachées.
 
     Args:
@@ -81,6 +87,7 @@ def write_erp_output(
         all_invoices: toutes les factures ERP.
         erp_matches: résultats de réconciliation par _row_idx.
         output_path: chemin du fichier de sortie.
+        unpaid_unmatched: factures non-payées non rapprochées (onglet dédié).
     """
     wb = openpyxl.load_workbook(source_path)
     ws = wb.active
@@ -191,6 +198,96 @@ def write_erp_output(
 
     # ── Figer les volets en G2 ────────────────────────────────────────────────
     ws.freeze_panes = "G2"
+
+    # ── Onglet "Factures à payer" ─────────────────────────────────────────────
+    if unpaid_unmatched:
+        ws_fap = wb.create_sheet(title="Factures à payer")
+        fap_headers = [
+            "Numéro de facture",
+            "Client",
+            "Montant TTC",
+            "Statut",
+            "Date d'émission",
+            "Compte bancaire",
+        ]
+        bold = Font(bold=True)
+        for i, h in enumerate(fap_headers, 1):
+            cell = ws_fap.cell(row=1, column=i, value=h)
+            cell.font = bold
+
+        sorted_invs = sorted(
+            unpaid_unmatched,
+            key=lambda x: (
+                str(x.get("Client") or ""),
+                str(x.get("Numéro de facture") or ""),
+            ),
+        )
+        grand_total = 0.0
+        for row_i, inv in enumerate(sorted_invs, start=2):
+            amount = (
+                normalize_amount(inv.get("Total à facturer (TTC)")) or 0.0
+            )
+            grand_total += amount
+            emission = (
+                to_date(inv.get("Date de facturation réelle"))
+                or parse_date(inv.get("Date de facturation réelle"))
+                or ""
+            )
+            ws_fap.cell(
+                row=row_i, column=1,
+                value=str(inv.get("Numéro de facture", "") or ""),
+            )
+            ws_fap.cell(
+                row=row_i, column=2,
+                value=str(inv.get("Client", "") or ""),
+            )
+            c_amt = ws_fap.cell(row=row_i, column=3, value=amount)
+            c_amt.number_format = "#,##0.00"
+            ws_fap.cell(
+                row=row_i, column=4,
+                value=str(inv.get("Statut", "") or ""),
+            )
+            c_date = ws_fap.cell(row=row_i, column=5, value=emission)
+            if isinstance(emission, datetime):
+                c_date.number_format = DATE_FORMAT
+            ws_fap.cell(
+                row=row_i, column=6,
+                value=str(inv.get("Compte bancaire", "") or ""),
+            )
+
+        # Ligne total
+        total_row = len(sorted_invs) + 2
+        lbl = ws_fap.cell(row=total_row, column=2, value="TOTAL")
+        lbl.font = bold
+        c_total = ws_fap.cell(
+            row=total_row, column=3, value=grand_total
+        )
+        c_total.number_format = "#,##0.00"
+        c_total.font = bold
+
+        # Tableau Excel (hors ligne total)
+        fap_ref = f"A1:F{total_row - 1}"
+        fap_table = Table(displayName="FacturesAPayer", ref=fap_ref)
+        fap_table.tableStyleInfo = TableStyleInfo(
+            name="TableStyleLight4",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        ws_fap.add_table(fap_table)
+
+        # Auto-dimensionnement
+        for col_cells in ws_fap.iter_cols():
+            max_len = max(
+                (len(str(c.value)) for c in col_cells if c.value),
+                default=10,
+            )
+            ws_fap.column_dimensions[
+                get_column_letter(col_cells[0].column)
+            ].width = min(max_len + 2, 40)
+
+        ws_fap.freeze_panes = "A2"
 
     wb.save(output_path)
 

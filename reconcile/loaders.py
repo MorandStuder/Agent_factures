@@ -199,6 +199,50 @@ def load_previous_comments() -> dict[tuple, str]:
     return result
 
 
+def load_previous_erp_matches() -> set[str]:
+    """Charge les numéros de factures rapprochées lors du dernier run ERP.
+
+    Cherche le fichier ERP_reconcilie_*.xlsx le plus récent dans output/ et
+    retourne les numéros dont le Score confiance est > 0.
+
+    Returns:
+        Set des numéros de factures rapprochées au run précédent.
+    """
+    candidates = sorted(OUTPUT_DIR.glob("ERP_reconcilie_*.xlsx"), reverse=True)
+    if not candidates:
+        return set()
+    latest = candidates[0]
+    try:
+        wb = openpyxl.load_workbook(latest, read_only=True, data_only=True)
+        ws = wb.active
+        headers = [
+            str(c.value) if c.value else ""
+            for c in next(ws.iter_rows(min_row=1, max_row=1))
+        ]
+        num_col = next(
+            (i for i, h in enumerate(headers)
+             if "Numéro" in h and "facture" in h.lower()),
+            None,
+        )
+        score_col = next(
+            (i for i, h in enumerate(headers) if "Score" in h),
+            None,
+        )
+        if num_col is None or score_col is None:
+            wb.close()
+            return set()
+        matched: set[str] = set()
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            score = row[score_col]
+            num = str(row[num_col] or "").strip()
+            if num and score and float(score) > 0:
+                matched.add(num)
+        wb.close()
+        return matched
+    except Exception:
+        return set()
+
+
 def load_workbook_data(path: Path) -> tuple[list[str], list[dict]]:
     """Charge un fichier xlsx, retourne (headers, lignes dict avec _row_idx).
 

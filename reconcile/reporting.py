@@ -10,7 +10,6 @@ from .config import (
     UNPAID_STATUSES,
 )
 from .loaders import (
-    dates_close,
     load_client_mapping,
     load_previous_comments,
     load_workbook_data,
@@ -34,28 +33,38 @@ def print_summary(
     all_invoices: list[dict],
     erp_matches: dict[int, dict],
     bank_matches: dict[int, list[str]],
+    prev_matched: set[str] | None = None,
 ) -> None:
     """Affiche le résumé de réconciliation dans la console.
 
-    Affiche les compteurs globaux, les factures non rapprochées, et les
-    correspondances à vérifier manuellement (score < THRESHOLD_AUTO).
+    Affiche les compteurs globaux, les nouvelles réconciliations vs run
+    précédent, les factures non rapprochées, et les correspondances à
+    vérifier manuellement (score < THRESHOLD_AUTO).
 
     Args:
         all_invoices: toutes les factures ERP (hors annulées/avoirs).
         erp_matches: résultats de réconciliation par _row_idx.
         bank_matches: lignes bancaires rapprochées par _row_idx.
+        prev_matched: numéros rapprochés au run précédent (optionnel).
     """
     total_all = len(all_invoices)
-    total_unpaid = sum(1 for inv in all_invoices if inv.get("Statut") in UNPAID_STATUSES)
+    total_unpaid = sum(
+        1 for inv in all_invoices
+        if inv.get("Statut") in UNPAID_STATUSES
+    )
     matched_all = len(erp_matches)
-    matched_auto = sum(1 for m in erp_matches.values() if m["score"] >= THRESHOLD_AUTO)
+    matched_auto = sum(
+        1 for m in erp_matches.values()
+        if m["score"] >= THRESHOLD_AUTO
+    )
     matched_review = sum(
         1 for m in erp_matches.values()
         if THRESHOLD_REVIEW <= m["score"] < THRESHOLD_AUTO
     )
     unpaid_matched = sum(
         1 for inv in all_invoices
-        if inv.get("Statut") in UNPAID_STATUSES and inv["_row_idx"] in erp_matches
+        if inv.get("Statut") in UNPAID_STATUSES
+        and inv["_row_idx"] in erp_matches
     )
     unpaid_unmatched = total_unpaid - unpaid_matched
     bank_filled = len(bank_matches)
@@ -67,16 +76,62 @@ def print_summary(
     print(f"  Dont non-payées                : {total_unpaid}")
     print(f"  Lignes banque rapprochées      : {bank_filled}")
     print(f"  Factures ERP rapprochées total : {matched_all}")
-    print(f"    dont auto (score >= {THRESHOLD_AUTO})       : {matched_auto}")
-    print(f"    dont à vérifier ({THRESHOLD_REVIEW}-{THRESHOLD_AUTO - 1})        : {matched_review}")
-    print(f"  Non-payées rapprochées         : {unpaid_matched} / {total_unpaid}")
+    print(
+        f"    dont auto (score >= {THRESHOLD_AUTO})"
+        f"       : {matched_auto}"
+    )
+    print(
+        f"    dont à vérifier ({THRESHOLD_REVIEW}-{THRESHOLD_AUTO - 1})"
+        f"        : {matched_review}"
+    )
+    print(
+        f"  Non-payées rapprochées         : "
+        f"{unpaid_matched} / {total_unpaid}"
+    )
     print(f"  Non-payées NON rapprochées     : {unpaid_unmatched}")
     print("=" * 65)
+
+    # ── Nouvelles réconciliations vs run précédent ────────────────────────
+    if prev_matched is not None:
+        current_nums = {
+            str(inv.get("Numéro de facture", "") or "").strip()
+            for inv in all_invoices
+            if inv["_row_idx"] in erp_matches
+        }
+        newly = sorted(current_nums - prev_matched)
+        lost = sorted(prev_matched - current_nums)
+        print(
+            f"\n  NOUVELLES RÉCONCILIATIONS : "
+            f"+{len(newly)} / -{len(lost)} vs run précédent"
+        )
+        if newly:
+            inv_by_num = {
+                str(i.get("Numéro de facture", "") or "").strip(): i
+                for i in all_invoices
+            }
+            for num in newly:
+                inv = inv_by_num.get(num)
+                if not inv:
+                    continue
+                m = erp_matches.get(inv["_row_idx"])
+                score = m["score"] if m else 0
+                client = str(inv.get("Client", "") or "")
+                note = (m.get("note") or "") if m else ""
+                print(
+                    f"    + {num:<15} {client:<28}"
+                    f" score={score}  {note}"
+                )
+        if lost:
+            for num in lost:
+                print(f"    - {num} (plus rapproché)")
 
     if unpaid_unmatched > 0:
         print("\n  FACTURES NON-PAYÉES NON RAPPROCHÉES :")
         for inv in all_invoices:
-            if inv.get("Statut") in UNPAID_STATUSES and inv["_row_idx"] not in erp_matches:
+            if (
+                inv.get("Statut") in UNPAID_STATUSES
+                and inv["_row_idx"] not in erp_matches
+            ):
                 num = str(inv.get("Numéro de facture", "") or "")
                 client = str(inv.get("Client", "") or "")
                 ttc = str(inv.get("Total à facturer (TTC)", "") or "")
@@ -114,20 +169,25 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
     - Pour le compte LCL : affiche le total de chaque client vs le crédit
 
     Args:
-        row_indices: liste des _row_idx (numéros de ligne Excel, base 1, header=1).
+        row_indices: liste des _row_idx (numéros de ligne Excel, base 2).
     """
     client_mapping, account_overrides = load_client_mapping()
     previous_comments = load_previous_comments()
     _, all_invoices = load_workbook_data(ERP_FILE)
     _, bank_rows = load_workbook_data(BANK_FILE)
 
-    matchable = [i for i in all_invoices if i.get("Statut") not in CANCELLED_STATUSES]
+    matchable = [
+        i for i in all_invoices
+        if i.get("Statut") not in CANCELLED_STATUSES
+    ]
     inv_by_acct_amount: dict[tuple[str, float], list[dict]] = {}
     for inv in matchable:
         amount = normalize_amount(inv.get("Total à facturer (TTC)"))
         bank_acct = resolve_bank_account(inv, account_overrides)
         if amount and bank_acct:
-            inv_by_acct_amount.setdefault((bank_acct, amount), []).append(inv)
+            inv_by_acct_amount.setdefault(
+                (bank_acct, amount), []
+            ).append(inv)
 
     row_map = {r["_row_idx"]: r for r in bank_rows}
     SEP = "-" * 70
@@ -148,7 +208,10 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
         comment = str(row.get("Commentaire", "") or "")
         btext = bank_text(row)
 
-        print(f"[ligne {idx}]  compte={acct!r}  crédit={amount}  date={date}")
+        print(
+            f"[ligne {idx}]  compte={acct!r}"
+            f"  crédit={amount}  date={date}"
+        )
         print(f"  op_type  : {op_type}")
         print(f"  libellé  : {libelle}")
         print(f"  info_comp: {info}")
@@ -159,9 +222,18 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
             label = get_bank_row_label(row)
             op_code = op_type.split("-")[0].strip()
             if op_code in {"12", "63", "77", "99"}:
-                print(f"  → EXCLUE (type op {op_code} dans EXCLUDED_OPERATION_TYPES)")
-            elif any(kw.upper() in (libelle + " " + info).upper() for kw in ["11 INVEST", "FACTOR"]):
-                print("  → EXCLUE silencieusement (mot-clé SILENT_LIBELLE_KEYWORDS)")
+                print(
+                    f"  → EXCLUE (type op {op_code}"
+                    f" dans EXCLUDED_OPERATION_TYPES)"
+                )
+            elif any(
+                kw.upper() in (libelle + " " + info).upper()
+                for kw in ["11 INVEST", "FACTOR"]
+            ):
+                print(
+                    "  → EXCLUE silencieusement"
+                    " (mot-clé SILENT_LIBELLE_KEYWORDS)"
+                )
             else:
                 print(f"  → EXCLUE (étiquetée {label!r} via LABELED)")
             continue
@@ -172,9 +244,16 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
             continue
 
         # 3. Commentaire issu d'un output précédent
-        key = (str(row.get("Date comptable") or ""), libelle, str(row.get("Credit") or ""))
+        key = (
+            str(row.get("Date comptable") or ""),
+            libelle,
+            str(row.get("Credit") or ""),
+        )
         if previous_comments.get(key):
-            print(f"  → EXCLUE (commentaire output précédent : {previous_comments[key]!r})")
+            print(
+                f"  → EXCLUE (commentaire output précédent : "
+                f"{previous_comments[key]!r})"
+            )
             continue
 
         if not amount:
@@ -183,10 +262,15 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
 
         # 4. Factures candidates (même compte, même montant)
         candidates = inv_by_acct_amount.get((acct, amount), [])
-        print(f"\n  Factures avec compte={acct!r} et montant={amount} : {len(candidates)}")
+        print(
+            f"\n  Factures avec compte={acct!r}"
+            f" et montant={amount} : {len(candidates)}"
+        )
         for inv in candidates:
             inv_client = str(inv.get("Client", "") or "").strip()
-            inv_num = str(inv.get("Numéro de facture", "") or "").strip()
+            inv_num = str(
+                inv.get("Numéro de facture", "") or ""
+            ).strip()
             inv_status = str(inv.get("Statut", "") or "")
             pay_date = parse_date(inv.get("Date de paiement"))
             sim = client_similarity(inv_client, btext, client_mapping)
@@ -204,13 +288,19 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
             )
             before = payment_before_emission(date, inv)
             print(
-                f"    {inv_num:<16} {inv_client:<25} statut={inv_status:<12} "
-                f"pay_date={pay_date or 'None':<12} date_ok={date_ok}  before={before}  sim={sim:.0f}  score={score}"
+                f"    {inv_num:<16} {inv_client:<25}"
+                f" statut={inv_status:<12} "
+                f"pay_date={pay_date or 'None':<12}"
+                f" date_ok={date_ok}  before={before}"
+                f"  sim={sim:.0f}  score={score}"
             )
 
         # 5. Numéros de facture extraits du libellé
         found_nums = extract_invoice_numbers(btext)
-        print(f"\n  Numéros extraits du texte bancaire : {found_nums or '(aucun)'}")
+        print(
+            f"\n  Numéros extraits du texte bancaire : "
+            f"{found_nums or '(aucun)'}"
+        )
 
         # 6. Vue clients LCL (compte le plus agrégé)
         lcl_acct = ACCOUNT_MAPPING.get("LCL", "")
@@ -225,11 +315,17 @@ def diagnose_bank_rows(row_indices: list[int]) -> None:
                 ef_by_client.setdefault(c, []).append(inv)
             print("\n  Clients LCL avec factures :")
             for client, invs in ef_by_client.items():
-                amounts = [normalize_amount(i.get("Total à facturer (TTC)")) or 0 for i in invs]
+                amounts = [
+                    normalize_amount(
+                        i.get("Total à facturer (TTC)")
+                    ) or 0
+                    for i in invs
+                ]
                 total = sum(amounts)
                 print(
                     f"    {client:<25}  {len(invs)} factures  "
-                    f"total={total:.2f}  diff_vs_crédit={abs(total - amount):.2f}"
+                    f"total={total:.2f}"
+                    f"  diff_vs_crédit={abs(total - amount):.2f}"
                 )
         print()
 

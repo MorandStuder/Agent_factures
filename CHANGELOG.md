@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.3 — 2026-03-30
+
+### Fonctionnalités
+- Console : section "NOUVELLES RÉCONCILIATIONS" affichant le diff +/- vs le
+  run précédent (lecture du dernier fichier ERP en sortie)
+- Fichier ERP : onglet "Factures à payer" — tableau des factures non-payées
+  non rapprochées, trié par client, avec total en bas
+- Correction scoring sous-passe A : `amount_match=True` pour les combos
+  (la somme correspond au crédit, pas forcément le montant individuel)
+
+---
+
 ## v1.2.2 — 2026-03-20
 
 ### Améliorations

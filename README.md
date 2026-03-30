@@ -16,8 +16,10 @@ py main.py --diagnose 441 549 560
 ## Sorties
 
 Dans `output/` :
-- `ERP_reconcilie_YYYYMMDD_HHMMSS.xlsx` — ERP enrichi avec 6 colonnes ajoutées (tableau vert clair, volets figés en G2, colonnes B–E masquées)
+- `ERP_reconcilie_YYYYMMDD_HHMMSS.xlsx` — ERP enrichi avec 6 colonnes ajoutées (tableau vert clair, volets figés en G2, colonnes B–E masquées) + onglet **"Factures à payer"**
 - `Banque_reconciliee_YYYYMMDD_HHMMSS.xlsx` — relevé bancaire enrichi avec 7 colonnes ajoutées ; dates C/D et montant F reformatés (date `DD/MM/YYYY`, nombre `#,##0.00`)
+
+L'onglet **Factures à payer** liste toutes les factures non-payées non rapprochées, triées par client, avec le total en bas. Il est recalculé à chaque run.
 
 ## Structure du projet
 
@@ -38,6 +40,8 @@ Agent_factures/
 ├── output/                    # fichiers générés (non commités)
 └── requirements.txt
 ```
+
+La console affiche en fin de run un **résumé des nouvelles réconciliations** : factures nouvellement rapprochées (+) ou perdues (-) par rapport au run précédent.
 
 ## Algorithme
 
