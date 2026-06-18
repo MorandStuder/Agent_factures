@@ -99,6 +99,7 @@ def write_erp_output(
         "Score confiance",
         "Note réconciliation",
         "Libellé bancaire",
+        "Info complémentaire bancaire",
         "Montant crédit",
     ]
 
@@ -140,16 +141,17 @@ def write_erp_output(
                 score,
                 match["note"] or "",
                 match.get("bank_libelle") or "",
+                match.get("bank_info") or "",
                 match.get("bank_credit") or "",
             ]
         elif row_idx in unpaid_idx:
             fill = FILL_NONE
-            values = ["", "", 0, "Non rapproché", "", ""]
+            values = ["", "", 0, "Non rapproché", "", "", ""]
         else:
             continue  # facture payée sans correspondance : pas de coloriage
 
         DATE_IDX = 0        # "Date paiement constatée"
-        MONTANT_CREDIT_IDX = 5  # "Montant crédit"
+        MONTANT_CREDIT_IDX = 6  # "Montant crédit"
         for i, val in enumerate(values):
             # Convertit les dates string en datetime pour format natif Excel
             if i == DATE_IDX and val:
