@@ -75,6 +75,7 @@ def find_matching_combo(
         br.get("Référence") or br.get("Numéro de piece") or ""
     )
     bank_libelle = str(br.get("Libellé", "") or "")
+    bank_info = str(br.get("Informations Complémentaires", "") or "")
     bank_credit = normalize_amount(br.get("Credit"))
 
     # ── Combos factures seules ────────────────────────────────────────────────
@@ -130,6 +131,7 @@ def find_matching_combo(
                         ),
                         "note": note,
                         "bank_libelle": bank_libelle,
+                        "bank_info": bank_info,
                         "bank_credit": bank_credit,
                     }
                 bank_matches.setdefault(br_idx, []).extend(nums)
@@ -216,6 +218,7 @@ def find_matching_combo(
                                 ),
                                 "note": note,
                                 "bank_libelle": bank_libelle,
+                                "bank_info": bank_info,
                                 "bank_credit": bank_credit,
                             }
                         for av in av_combo:
@@ -247,6 +250,7 @@ def find_matching_combo(
                                 ),
                                 "note": av_note,
                                 "bank_libelle": bank_libelle,
+                                "bank_info": bank_info,
                                 "bank_credit": bank_credit,
                             }
                         bank_matches.setdefault(br_idx, []).extend(nums)
@@ -441,6 +445,7 @@ def pass1_bank_to_invoices(
                     ),
                     "note": note,
                     "bank_libelle": str(br.get("Libellé", "") or ""),
+                    "bank_info": str(br.get("Informations Complémentaires", "") or ""),
                     "bank_credit": normalize_amount(br.get("Credit")),
                 }
                 bank_matches.setdefault(br_idx, []).append(inv_num)
@@ -501,6 +506,7 @@ def pass1_bank_to_invoices(
                     "score": score,
                     "note": "",
                     "bank_libelle": str(br.get("Libellé", "") or ""),
+                    "bank_info": str(br.get("Informations Complémentaires", "") or ""),
                     "bank_credit": normalize_amount(br.get("Credit")),
                 }
                 bank_matches.setdefault(br_idx, []).append(inv_num)
@@ -579,6 +585,7 @@ def pass1_bank_to_invoices(
                         f" / banque={bank_acct}"
                     ),
                     "bank_libelle": str(br.get("Libellé", "") or ""),
+                    "bank_info": str(br.get("Informations Complémentaires", "") or ""),
                     "bank_credit": normalize_amount(br.get("Credit")),
                 }
                 bank_matches.setdefault(br_idx, []).append(inv_num)
@@ -637,6 +644,7 @@ def pass1_bank_to_invoices(
                 ),
                 "note": note,
                 "bank_libelle": str(br.get("Libellé", "") or ""),
+                "bank_info": str(br.get("Informations Complémentaires", "") or ""),
                 "bank_credit": normalize_amount(br.get("Credit")),
             }
             bank_matches.setdefault(br_idx, []).append(inv_num)
